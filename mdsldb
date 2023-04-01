@@ -9,6 +9,8 @@ from rich.style import Style
 from rich.color import Color
 from mysql.connector import Error
 
+password = 'gaspcrisiscarry44'
+
 def create_server_connection(host_name, user_name, db, user_password):
     connection = None
     try:
@@ -19,7 +21,7 @@ def create_server_connection(host_name, user_name, db, user_password):
             database=db,
             passwd=user_password
         )
-        print("MySQL Database connection successful")
+        print("~connected~")
     except Error as err:
         print(f"Error: '{err}'")
 
@@ -49,16 +51,6 @@ def rgb(r, g, b):
     return color
 
 
-cellstyles = {
-        'description':Style(color=rgb(185,110,100), bold=True),
-        'task_description':Style(color=rgb(130,150,210), bold=True),
-        'jID':Style(color=rgb(130,190,210), bold=True),
-        'clientname':Style(color=rgb(150,200,100),bold=True),
-        'itemname':Style(color=rgb(120,80,200), bold=True),
-        'tags':Style(color=rgb(120,180,100), bold=True),
-        'completed':Style(color=rgb(50,200,100), bold=True),
-        'next_task':Style(color=rgb(90,170,170), bold=True)
-        }
 
 @click.group()
 def cli():
@@ -68,14 +60,31 @@ def cli():
     pass
 
 @cli.command("jobsum")
-@click.option('-t', '--tag', default='.*')
+@click.option('-t', '--tag', default='.*', help="filter tags using this regex string")
 @click.option('-v', '-f', '--verbose', is_flag=True, default=False)
-def jobSum(tag, verbose):
-    connection = create_server_connection("localhost", "aa", "soundlabs_work", "gaspcrisiscarry44")
+@click.option('-o', '--order', default=None, help="sort by this column name")
+def jobSum(tag, verbose, order):
+    """
+    quick summary of all active jobs
+    """
+    cellstyles = {
+            'description':Style(color=rgb(185,110,100), bold=True),
+            'task_description':Style(color=rgb(130,150,210), bold=True),
+            'jID':Style(color=rgb(130,190,210), bold=True),
+            'clientname':Style(color=rgb(150,200,100),bold=True),
+            'itemname':Style(color=rgb(120,80,200), bold=True),
+            'tags':Style(color=rgb(120,180,100), bold=True),
+            'completed':Style(color=rgb(50,200,100), bold=True),
+            'next_task':Style(color=rgb(90,170,170), bold=True)
+            }
+    connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
+    orderstring = ''
+    if order: #sort by the field name defined by variable order
+        orderstring = "ORDER BY "+ order
     console = Console()
-    query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'"
+    query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring
     output = read_query(connection, query)
-    rows = read_query(connection, "DESCRIBE \"Job Summary\";")
+    columns = read_query(connection, "DESCRIBE \"Job Summary\";")
     overflow_string = 'fold'
     nowrap = not verbose
 
@@ -84,7 +93,7 @@ def jobSum(tag, verbose):
             expand=True,
             row_styles=(Style(bgcolor=rgb(70,55,65)), Style(bgcolor=rgb(60,45,60)))
             )
-    for item in rows:
+    for item in columns:
         columntitle = item[0]
         try:
             style = cellstyles[columntitle]
@@ -92,13 +101,13 @@ def jobSum(tag, verbose):
             style = "blue"
         if columntitle == 'description':
             table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, ratio=0.2, style=style)
+                    no_wrap=nowrap, ratio=0.16, style=style)
         elif columntitle == 'completed':
             table.add_column(columntitle, overflow='crop', 
                     no_wrap=nowrap, width=2, style=style)
         elif columntitle == 'task_description':
             table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, ratio=0.2, style=style)
+                    no_wrap=nowrap, ratio=0.24, style=style)
         elif columntitle == 'job_ID':
             table.add_column(columntitle, overflow=overflow_string, 
                     no_wrap=nowrap, width=2, style=style)
@@ -120,11 +129,151 @@ def jobSum(tag, verbose):
             recordstring.append(str(item))
         table.add_row(*recordstring)
     #print(output)
-    #print(rows)
+    #print(columns)
     console.print(table)
 
+@cli.command("tasksum")
+@click.option('-t', '--tag', default='.*', help="filter tags using this regex string")
+@click.option('-i', '--taskid', default='%', help="filter taskids")
+@click.option('-v', '-f', '--verbose', is_flag=True, default=False)
+@click.option('-o', '--order', default=None, help="sort by this column name")
+def taskSum(tag, verbose, taskid, order):
+    """
+    quick summary of all active tasks
+    """
+    cellstyles = {
+            'task_description':Style(color=rgb(130,150,210), bold=True),
+            'job_ID':Style(color=rgb(130,190,210), bold=True),
+            'task_ID':Style(color=rgb(130,190,210), bold=True),
+            'clientname':Style(color=rgb(150,200,100),bold=True),
+            'itemname':Style(color=rgb(120,80,200), bold=True),
+            'tags':Style(color=rgb(120,180,100), bold=True),
+            'who':Style(color=rgb(150,100,120), bold=True),
+            'location':Style(color=rgb(80,100,120), bold=True),
+            'priority':Style(color=rgb(50,200,100), bold=True),
+            }
+    connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
+    console = Console()
+    orderstring = ''
+    if order: #sort by the field name defined by variable order
+        orderstring = "ORDER BY "+ order
+    query = "SELECT * FROM \"Task Summary\" WHERE tags RLIKE \'" \
+        + tag + "\' " + "AND " \
+        + "task_ID LIKE \'" + taskid + "\' " \
+        + orderstring
+    print(query)
+    output = read_query(connection, query)
+    columns = read_query(connection, "DESCRIBE \"Task Summary\";")
+    overflow_string = 'fold'
+    nowrap = not verbose
+
+    table = Table(title='View: Task Summary',
+            padding=(0,0),
+            expand=True,
+            row_styles=(Style(bgcolor=rgb(70,55,65)), Style(bgcolor=rgb(60,45,60)))
+            )
+    for item in columns:
+        columntitle = item[0]
+        try:
+            style = cellstyles[columntitle]
+        except:
+            style = "blue"
+        if columntitle == 'task_ID':
+            table.add_column(columntitle, overflow=overflow_string, 
+                    no_wrap=nowrap, width=2, style=style)
+        elif columntitle == 'task_description':
+            table.add_column(columntitle, overflow=overflow_string, 
+                    no_wrap=nowrap, ratio=0.24, style=style)
+        elif columntitle == 'job_ID':
+            table.add_column(columntitle, overflow=overflow_string, 
+                    no_wrap=nowrap, width=2, style=style)
+        elif columntitle == 'priority':
+            table.add_column(columntitle, overflow='crop', 
+                    no_wrap=nowrap, width=2, style=style)
+        elif columntitle == 'clientname':
+            table.add_column(columntitle, overflow=overflow_string, 
+                    no_wrap=nowrap, width=7, style=style)
+        elif columntitle == 'itemname':
+            table.add_column(columntitle, overflow=overflow_string, 
+                    no_wrap=nowrap, width=10, style=style)
+        else:
+            table.add_column(columntitle, overflow=overflow_string, no_wrap=nowrap, width=None, style=style)
+
+    for record in output:
+        recordstring = []
+        for item in record:
+            recordstring.append(str(item))
+        table.add_row(*recordstring)
+    #print(output)
+    #print(columns)
+    console.print(table)
         
-        
+@cli.command('add')
+@click.argument('task_description', nargs=-1)
+@click.option('-j', '--job', default=None, help="Name of the job to attach this task to")
+def add(task_description, job):
+    """
+    add a new task
+    """
+    connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
+    #reconstruct task description
+    task_string = ''
+    for word in task_description:
+        task_string += word
+        task_string += ' '
+
+    if job:
+        jobIDquery = "SELECT job_ID from jobs_active WHERE itemname RLIKE \'" + job + "\' LIMIT 1"
+        try:
+            jobid = read_query(connection, jobIDquery)[0][0]
+        except IndexError:
+            print("Sorry, no matching job found!")
+            jobid = None
+            return None #EXIT FUNCTION
+        if jobid:
+            query = "INSERT INTO tasks (task_description, job_ID) VALUES (\'" + task_string + "\'," + str(jobid) + ");"
+    else: #no job specified! just add the task without a job id
+        query = "INSERT INTO tasks (task_description) VALUES (\'" + task_string + "\');"
+
+    print(query)
+    output = execute_query(connection, query)
+
+#TASK GROUP
+@cli.group('task', invoke_without_command=True)
+@click.argument('taskid', default=None)
+@click.pass_context
+def task(context, taskid):
+    """
+    address, inspect or modify a single task
+    """
+    #pass taskid to subcommands through the context.obj dict.
+    if context.invoked_subcommand == None:
+        connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
+        table = Table(title='task' + str(taskid),
+                padding=(0,0),
+                expand=True,
+                row_styles=(Style(bgcolor=rgb(70,55,65)), Style(bgcolor=rgb(60,45,60)))
+                )
+        query = "SELECT * from tasks WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
+        columns = read_query(connection, "DESCRIBE tasks;")
+        for item in columns:
+            columntitle = item[0]
+            table.add_column(columntitle, overflow='fold', width=None)
+        taskrecord = read_query(connection, query)
+        table.add_row(*(str(x) for x in taskrecord[0]))
+        print(table)
+    else:
+        context.obj = {}
+        context.obj['taskid'] = taskid
+
+@task.command('delete')
+@click.pass_context
+def delete(context):
+    connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
+    taskid = context.obj['taskid']
+    query = "DELETE from tasks WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
+    output = execute_query(connection, query)
+    print(output)
 
 
 if __name__ == '__main__':
