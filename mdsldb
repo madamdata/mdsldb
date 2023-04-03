@@ -1,15 +1,20 @@
 #!/usr/bin/python3
 
-import mysql.connector
-import click
+import mysql.connector, click, os
 from rich import print
 from rich.table import Table
 from rich.console import Console
 from rich.style import Style
 from rich.color import Color
 from mysql.connector import Error
+import re
+from dotenv import load_dotenv, dotenv_values
 
-password = 'gaspcrisiscarry44'
+
+# Load environment and initialize airtable interface
+# load_dotenv()
+load_dotenv()
+password = os.environ['PASSWORD']
 
 def create_server_connection(host_name, user_name, db, user_password):
     connection = None
@@ -58,6 +63,38 @@ def cli():
     mdsl database command line utilities. 
     """ 
     pass
+
+@cli.command("rawquery")
+@click.argument('querystring')
+def rawquery(querystring):
+    """
+    Execute arbitrary SQL query
+    """
+    connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
+    tablenamematch = re.search(r"(?i)FROM (\".*\"|[^\s\"]*)", querystring)
+    if tablenamematch:
+        tablename = tablenamematch.group(1)
+        print(tablename)
+    else:
+        print("No such table.")
+        return None
+    
+    table = Table(title='query result',
+            padding=(0,0),
+            expand=True,
+            row_styles=(Style(bgcolor=rgb(70,55,65)), Style(bgcolor=rgb(60,45,60)))
+            )
+    query = querystring
+    columns = read_query(connection, "DESCRIBE " + tablename + " ;")
+    for item in columns:
+        columntitle = item[0]
+        table.add_column(columntitle, overflow='fold', width=None)
+    taskrecord = read_query(connection, query)
+    print(len(taskrecord))
+    if len(taskrecord) > 0:
+        for item in taskrecord:
+            table.add_row(*(str(x) for x in item))
+    print(table)
 
 @cli.command("jobsum")
 @click.option('-t', '--tag', default='.*', help="filter tags using this regex string")
@@ -133,7 +170,7 @@ def jobSum(tag, verbose, order):
     console.print(table)
 
 @cli.command("tasksum")
-@click.option('-t', '--tag', default='.*', help="filter tags using this regex string")
+@click.option('-t', '--tag', default=None, help="filter tags using this regex string")
 @click.option('-i', '--taskid', default='%', help="filter taskids")
 @click.option('-v', '-f', '--verbose', is_flag=True, default=False)
 @click.option('-o', '--order', default=None, help="sort by this column name")
@@ -157,10 +194,15 @@ def taskSum(tag, verbose, taskid, order):
     orderstring = ''
     if order: #sort by the field name defined by variable order
         orderstring = "ORDER BY "+ order
-    query = "SELECT * FROM \"Task Summary\" WHERE tags RLIKE \'" \
-        + tag + "\' " + "AND " \
-        + "task_ID LIKE \'" + taskid + "\' " \
-        + orderstring
+    if tag: 
+        query = "SELECT * FROM \"Task Summary\" WHERE tags RLIKE \'" \
+            + tag + "\' " + "AND " \
+            + "task_ID LIKE \'" + taskid + "\' " \
+            + orderstring
+    else: 
+        query = "SELECT * FROM \"Task Summary\ WHERE "\
+            + "task_ID LIKE \'" + taskid + "\' " \
+            + orderstring
     print(query)
     output = read_query(connection, query)
     columns = read_query(connection, "DESCRIBE \"Task Summary\";")
@@ -238,7 +280,7 @@ def add(task_description, job):
     print(query)
     output = execute_query(connection, query)
 
-#TASK GROUP
+#----- TASK GROUP  ----------
 @cli.group('task', invoke_without_command=True)
 @click.argument('taskid', default=None)
 @click.pass_context
@@ -260,8 +302,11 @@ def task(context, taskid):
             columntitle = item[0]
             table.add_column(columntitle, overflow='fold', width=None)
         taskrecord = read_query(connection, query)
-        table.add_row(*(str(x) for x in taskrecord[0]))
-        print(table)
+        if len(taskrecord) > 0:
+            table.add_row(*(str(x) for x in taskrecord[0]))
+            print(table)
+        else: 
+            print("No task with that ID found.")
     else:
         context.obj = {}
         context.obj['taskid'] = taskid
@@ -272,6 +317,16 @@ def delete(context):
     connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
     taskid = context.obj['taskid']
     query = "DELETE from tasks WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
+    output = execute_query(connection, query)
+    print(output)
+
+@task.command('done')
+@click.pass_context
+def done(context):
+    connection = create_server_connection("localhost", "aa", "soundlabs_work", password)
+    taskid = context.obj['taskid']
+    #query = "UPDATE tasks SET completed = 1 WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
+    query = "CALL taskdone("+ taskid + ");"
     output = execute_query(connection, query)
     print(output)
 
