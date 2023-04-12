@@ -8,6 +8,7 @@ from rich.style import Style
 from rich.color import Color
 from mysql.connector import Error
 import re
+import dbclasses
 from dotenv import load_dotenv, dotenv_values
 
 
@@ -115,7 +116,7 @@ def executequery(querystring):
     return None
 
 @cli.command("jobsum")
-@click.option('-t', '--tag', default='.*', help="filter tags using this regex string")
+@click.option('-t', '--tag', default=None, help="filter tags using this regex string")
 @click.option('-v', '-f', '--verbose', is_flag=True, default=False)
 @click.option('-o', '--order', default=None, help="sort by this column name")
 def jobSum(tag, verbose, order):
@@ -133,11 +134,14 @@ def jobSum(tag, verbose, order):
             'next_task':Style(color=rgb(200,160,150), bold=True)
             }
     connection = connection = mdsldb_connect()
+    console = Console()
     orderstring = ''
     if order: #sort by the field name defined by variable order
         orderstring = "ORDER BY "+ order
-    console = Console()
-    query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring
+    if tag:
+        query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring + ";"
+    else:
+        query = "SELECT * FROM \"Job Summary\"" + orderstring + ";"
     output = read_query(connection, query)
     columns = read_query(connection, "DESCRIBE \"Job Summary\";")
     overflow_string = 'fold'
@@ -268,11 +272,11 @@ def taskSum(tag, verbose, taskid, order):
     #print(columns)
     console.print(table)
         
-@cli.command('add')
+@cli.command('addtask')
 @click.argument('task_description', nargs=-1)
 @click.option('-j', '--job', default=None, help="Name of the job to attach this task to")
 @click.option('-p', '--priority', default=50, help="priority level 0-100")
-def add(task_description, job, priority):
+def addtask(task_description, job, priority):
     """
     add a new task
     """
@@ -300,6 +304,38 @@ def add(task_description, job, priority):
     print(query)
     output = execute_query(connection, query)
     execute_query(connection, setnexttaskquery)
+
+#---- ADD JOB ----
+@cli.command('addjob')
+@click.argument('itemname', nargs=-1)
+@click.option('-d', '--description', default='', help="job description")
+@click.option('-c', '--client', default=None, help="client name or id")
+def addjob(itemname, description, client):
+    """
+    add a new job
+    """
+    connection = mdsldb_connect()
+    #reconstruct itemname
+    itemname_string = ''
+    for word in itemname:
+        itemname_string += word
+        itemname_string += ' '
+
+    if client:
+        clientIDquery = "SELECT client_ID from clients WHERE name RLIKE \'" + client + "\' LIMIT 1"
+        try:
+            clientid = read_query(connection, clientIDquery)[0][0]
+        except IndexError:
+            print("Sorry, no matching client found!")
+            clientid = None
+            return None #EXIT FUNCTION
+        if clientid:
+            query = "INSERT INTO jobs (itemname, client_ID, description) VALUES (\'" + itemname_string + "\'," + str(clientid) + ",\'" + description + "\');"
+    else: #no client specified! just add the task without a client id
+        query = "INSERT INTO tasks (itemname, description) VALUES (\'" + itemname_string + "\', " + description +");"
+
+    print(query)
+    output = execute_query(connection, query)
 
 #----- TASK GROUP  ----------
 @cli.group('task', invoke_without_command=True)
@@ -368,6 +404,25 @@ def job(context, jobid):
     else:
         context.obj = {}
         context.obj['jobid'] = jobid
+
+@job.command('delete')
+@click.pass_context
+def delete(context):
+    connection = mdsldb_connect()
+    jobid = context.obj['jobid']
+    query = "DELETE from jobs WHERE job_ID LIKE "+ jobid + " LIMIT 1;"
+    output = execute_query(connection, query)
+    print(output)
+
+@job.command('done')
+@click.pass_context
+def done(context):
+    connection = mdsldb_connect()
+    jobid = context.obj['jobid']
+    #query = "UPDATE tasks SET completed = 1 WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
+    query = "CALL jobdone("+ jobid + ");"
+    output = execute_query(connection, query)
+    print(output)
 
 if __name__ == '__main__':
     cli()
