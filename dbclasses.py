@@ -1,5 +1,14 @@
-import mysql.connector, os, re
+import mysql.connector, os, re, rich
+from rich import print
+from rich.table import Table
+from rich.console import Console
+from rich.style import Style
+from rich.color import Color
 from mysql.connector import Error
+
+def rgb(r, g, b):
+    color = Color.from_rgb(r, g, b)
+    return color
 
 def read_query(connection, query):
     cursor = connection.cursor()
@@ -31,7 +40,6 @@ def print_raw_query_to_table(connection, querystring):
     else:
         print("No such table.")
         return None
-    
     table = Table(title='query result',
             padding=(0,0),
             expand=True,
@@ -72,7 +80,11 @@ class DB_Dict(dict):
     def byID(clss, idnum, connection):
         query = "SELECT * from {} WHERE {} LIKE {} LIMIT 1;".format(clss.table_name, clss.id_string, idnum)
         columns = read_query(connection, "DESCRIBE {};".format(clss.table_name))
-        taskrecord = read_query(connection, query)[0]
+        queryreply = read_query(connection, query)
+        if queryreply: 
+            taskrecord = queryreply[0]
+        else:
+            return None
         db_dict=clss.fromDB(columns, taskrecord)
         return db_dict
 
@@ -87,7 +99,8 @@ class DB_Dict(dict):
             valtype = str(self[key][1])
             # add quotations to text data types
             if val:
-                if 'mediumtext' in valtype or 'varchar' in valtype:
+                if 'text' in valtype or 'varchar' in valtype:
+                    val = val.replace("'", "\\'").replace('"', '\\"')
                     val = '\'{}\''.format(val)
                 string = string + '{} = {}, '.format(str(key), str(val))
 
@@ -102,6 +115,19 @@ class DB_Dict(dict):
             except AttributeError as err:
                 print("Id is not a recognized number.")
 
+    def printToTable(self):
+        table = Table(title='task' + str(self.id), 
+                padding=(0,0),expand=True, 
+                row_styles=(Style(bgcolor=rgb(70,55,65)), 
+                Style(bgcolor=rgb(60,45,60)))
+                )
+        for item in self:
+            table.add_column(item, overflow='fold', width=None)
+        table.add_row(*(str(self[x][0]) for x in self))
+        print(table)
+
+
+
 class DB_Client(DB_Dict):
     """class encapsulating client data"""
     def __init__(self, **kwargs):
@@ -115,9 +141,12 @@ class DB_task(DB_Dict):
     """class encapsulating task data and functions"""
     def __init(self, **kwargs):
         pass
+
                     
 
 class DB_job(DB_Dict):
+    id_string = 'job_ID'
+    table_name = 'jobs'
     """class encapsulating job data and functions"""
     def __init(self, **kwargs):
         pass

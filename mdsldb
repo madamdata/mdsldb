@@ -306,22 +306,9 @@ def task(context, taskid):
     #pass taskid to subcommands through the context.obj dict.
     if context.invoked_subcommand == None:
         connection = mdsldb_connect()
-        table = Table(title='task' + str(taskid),
-                padding=(0,0),
-                expand=True,
-                row_styles=(Style(bgcolor=rgb(70,55,65)), Style(bgcolor=rgb(60,45,60)))
-                )
-        query = "SELECT * from tasks WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
-        columns = read_query(connection, "DESCRIBE tasks;")
-        for item in columns:
-            columntitle = item[0]
-            table.add_column(columntitle, overflow='fold', width=None)
-        taskrecord = read_query(connection, query)
-        if len(taskrecord) > 0:
-            table.add_row(*(str(x) for x in taskrecord[0]))
-            print(table)
-        else: 
-            print("No task with that ID found.")
+        task_obj = dbclasses.DB_task.byID(taskid, connection)
+        if task_obj:
+            task_obj.printToTable()
     else:
         context.obj = {}
         context.obj['taskid'] = taskid
@@ -329,6 +316,7 @@ def task(context, taskid):
 @task.command('delete')
 @click.pass_context
 def delete(context):
+    """ remove task from database """ 
     connection = mdsldb_connect()
     taskid = context.obj['taskid']
     query = "DELETE from tasks WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
@@ -338,6 +326,7 @@ def delete(context):
 @task.command('done')
 @click.pass_context
 def done(context):
+    """ mark task as completed """
     connection = mdsldb_connect()
     taskid = context.obj['taskid']
     #query = "UPDATE tasks SET completed = 1 WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
@@ -345,17 +334,22 @@ def done(context):
     output = execute_query(connection, query)
     print(output)
 
-@task.command('modtask')
+@task.command('mod')
 @click.pass_context
 @click.argument('argstring', nargs=-1)
 # @click.option('-c', '--col', default='')
-def modtask(context, argstring):
-    """ import taskid TEST FUNC """
+def mod(context, argstring):
+    """ modify task fields - syntax: st task <task_ID> mod <field> = <value>  """
     connection = mdsldb_connect()
     taskid = context.obj['taskid']
+    print(taskid)
     task_obj = dbclasses.DB_task.byID(taskid, connection)
 
     #reconstruct arg string
+    if len(argstring) == 0:
+        ctx = click.get_current_context()
+        click.echo(ctx.get_help())
+        return None
     mod_string = ''
     for word in argstring:
         mod_string += word
@@ -381,7 +375,6 @@ def modtask(context, argstring):
             print(output)
 
 
-    # print(task_obj, task_obj.id, task_obj.generateUpdateString())
 
 # --- JOB GROUP ---
 @cli.group('job', invoke_without_command=True)
@@ -419,6 +412,41 @@ def done(context):
     query = "CALL jobdone("+ jobid + ");"
     output = execute_query(connection, query)
     print(output)
+
+@job.command('mod')
+@click.pass_context
+@click.argument('argstring', nargs=-1)
+# @click.option('-c', '--col', default='')
+def mod(context, argstring):
+    """ modify job fields. Syntax: st job <job_ID> mod <field> = <value>  """
+    connection = mdsldb_connect()
+    jobid = context.obj['jobid']
+    job_obj = dbclasses.DB_job.byID(jobid, connection)
+
+    #reconstruct arg string
+    mod_string = ''
+    for word in argstring:
+        mod_string += word
+        mod_string += ' '
+    colname, val = mod_string.split('=')
+    colname = colname.strip()
+    val = val.strip()
+    print(colname, val)
+
+    # update the task object with new values
+    try:
+        job_obj[colname] = (val, job_obj[colname][1])
+    except KeyError:
+        print('No such field in this task.')
+    else: # if no errors
+        querystring = job_obj.generateUpdateString()
+        print(querystring)
+        confirm = input('Execute query {} ?\n(Y/n)'.format(querystring)) 
+
+        if confirm.lower() == 'y' or confirm.lower() == 'yes':
+            print('Executing.')
+            output = execute_query(connection, querystring)
+            print(output)
 
 # --- TEST LOCAL OBJECTS GROUP ---
 @cli.command('importtask')
