@@ -387,9 +387,12 @@ def job(context, jobid):
     #pass jobid to subcommands through the context.obj dict.
     if context.invoked_subcommand == None:
         connection = mdsldb_connect()
-        query = "SELECT * from jobs WHERE job_ID LIKE "+ jobid + " LIMIT 1;"
+        query = "SELECT * from jobs WHERE job_ID LIKE {} LIMIT 1;".format(jobid)
         table = print_raw_query_to_table(connection, query)
         print(table)
+        taskquery = "SELECT * from tasks WHERE job_ID LIKE {} AND COMPLETED = 0".format(jobid)
+        tasktable = print_raw_query_to_table(connection, taskquery)
+        print(tasktable)
     else:
         context.obj = {}
         context.obj['jobid'] = jobid

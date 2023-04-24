@@ -51,7 +51,7 @@ def print_raw_query_to_table(connection, querystring):
         columntitle = item[0]
         table.add_column(columntitle, overflow='fold', width=None)
     taskrecord = read_query(connection, query)
-    print(len(taskrecord))
+    # print(len(taskrecord))
     if len(taskrecord) > 0:
         for item in taskrecord:
             table.add_row(*(str(x) for x in item))
