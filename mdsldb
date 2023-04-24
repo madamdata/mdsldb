@@ -9,6 +9,7 @@ from rich.color import Color
 from mysql.connector import Error
 import re
 import dbclasses
+from dbclasses import read_query, execute_query, print_raw_query_to_table
 from dotenv import load_dotenv, dotenv_values
 
 
@@ -38,58 +39,10 @@ def mdsldb_connect():
     connection = create_server_connection("localhost", username, "soundlabs_work", password)
     return connection
 
-def execute_query(connection, query):
-    cursor = connection.cursor()
-    try:
-        cursor.execute(query)
-        connection.commit()
-        print("Query successful")
-    except Error as err:
-        print(f"Error: '{err}'")
-
-def read_query(connection, query):
-    cursor = connection.cursor()
-    result = None
-    try:
-        cursor.execute(query)
-        result = cursor.fetchall()
-        return result
-    except Error as err:
-        print(f"Error: '{err}'")
-
 def rgb(r, g, b):
     color = Color.from_rgb(r, g, b)
     return color
 
-
-def print_raw_query_to_table(connection, querystring):
-    """
-    Print arbitrary SQL query (read only)
-    """
-    tablenamematch = re.search(r"(?i)FROM (\".*\"|[^\s\"]*)", querystring)
-    if tablenamematch:
-        tablename = tablenamematch.group(1)
-        print(tablename)
-    else:
-        print("No such table.")
-        return None
-    
-    table = Table(title='query result',
-            padding=(0,0),
-            expand=True,
-            row_styles=(Style(bgcolor=rgb(70,55,65)), Style(bgcolor=rgb(60,45,60)))
-            )
-    query = querystring
-    columns = read_query(connection, "DESCRIBE " + tablename + " ;")
-    for item in columns:
-        columntitle = item[0]
-        table.add_column(columntitle, overflow='fold', width=None)
-    taskrecord = read_query(connection, query)
-    print(len(taskrecord))
-    if len(taskrecord) > 0:
-        for item in taskrecord:
-            table.add_row(*(str(x) for x in item))
-    return table
 
 @click.group()
 def cli():
@@ -283,9 +236,12 @@ def addtask(task_description, job, priority):
     connection = mdsldb_connect()
     #reconstruct task description
     task_string = ''
+    setnexttaskquery = None
+    query = None
     for word in task_description:
         task_string += word
         task_string += ' '
+    task_string = task_string.strip()
 
     if job:
         jobIDquery = "SELECT job_ID from jobs_active WHERE itemname RLIKE \'" + job + "\' LIMIT 1"
@@ -303,7 +259,8 @@ def addtask(task_description, job, priority):
 
     print(query)
     output = execute_query(connection, query)
-    execute_query(connection, setnexttaskquery)
+    if setnexttaskquery:
+        execute_query(connection, setnexttaskquery)
 
 #---- ADD JOB ----
 @cli.command('addjob')
@@ -320,6 +277,7 @@ def addjob(itemname, description, client):
     for word in itemname:
         itemname_string += word
         itemname_string += ' '
+    itemname_string = itemname_string.strip()
 
     if client:
         clientIDquery = "SELECT client_ID from clients WHERE name RLIKE \'" + client + "\' LIMIT 1"
@@ -387,6 +345,44 @@ def done(context):
     output = execute_query(connection, query)
     print(output)
 
+@task.command('modtask')
+@click.pass_context
+@click.argument('argstring', nargs=-1)
+# @click.option('-c', '--col', default='')
+def modtask(context, argstring):
+    """ import taskid TEST FUNC """
+    connection = mdsldb_connect()
+    taskid = context.obj['taskid']
+    task_obj = dbclasses.DB_task.byID(taskid, connection)
+
+    #reconstruct arg string
+    mod_string = ''
+    for word in argstring:
+        mod_string += word
+        mod_string += ' '
+    colname, val = mod_string.split('=')
+    colname = colname.strip()
+    val = val.strip()
+    print(colname, val)
+
+    # update the task object with new values
+    try:
+        task_obj[colname] = (val, task_obj[colname][1])
+    except KeyError:
+        print('No such field in this task.')
+    else: # if no errors
+        querystring = task_obj.generateUpdateString()
+        print(querystring)
+        confirm = input('Execute query {} ?\n(Y/n)'.format(querystring)) 
+
+        if confirm.lower() == 'y' or confirm.lower() == 'yes':
+            print('Executing.')
+            output = execute_query(connection, querystring)
+            print(output)
+
+
+    # print(task_obj, task_obj.id, task_obj.generateUpdateString())
+
 # --- JOB GROUP ---
 @cli.group('job', invoke_without_command=True)
 @click.argument('jobid', default=None)
@@ -423,6 +419,15 @@ def done(context):
     query = "CALL jobdone("+ jobid + ");"
     output = execute_query(connection, query)
     print(output)
+
+# --- TEST LOCAL OBJECTS GROUP ---
+@cli.command('importtask')
+@click.argument('taskid')
+def importtask(taskid):
+    """ import taskid TEST FUNC """
+    connection = mdsldb_connect()
+    task_obj = dbclasses.DB_task.byID(taskid, connection)
+    print(task_obj, task_obj.generateUpdateString())
 
 if __name__ == '__main__':
     cli()
