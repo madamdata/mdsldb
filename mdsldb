@@ -16,8 +16,8 @@ from dotenv import load_dotenv, dotenv_values
 # Load environment and initialize airtable interface
 # load_dotenv()
 load_dotenv()
-password = os.environ['PASSWORD']
-username = os.environ['USERNAME']
+password = os.environ['SQLPASSWORD']
+username = os.environ['SQLUSERNAME']
 
 def create_server_connection(host_name, user_name, db, user_password):
     connection = None
