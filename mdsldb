@@ -122,7 +122,7 @@ def jobSum(tag, verbose, order):
                     no_wrap=nowrap, ratio=0.24, style=style)
         elif columntitle == 'job_ID':
             table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, width=2, style=style)
+                    no_wrap=nowrap, width=3, style=style)
         elif columntitle == 'next_task':
             table.add_column(columntitle, overflow='crop', 
                     no_wrap=nowrap, width=3, style=style)
@@ -197,7 +197,7 @@ def taskSum(tag, verbose, taskid, order):
             style = "blue"
         if columntitle == 'task_ID':
             table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, width=2, style=style)
+                    no_wrap=nowrap, width=3, style=style)
         elif columntitle == 'task_description':
             table.add_column(columntitle, overflow=overflow_string, 
                     no_wrap=nowrap, ratio=0.24, style=style)
