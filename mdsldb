@@ -125,7 +125,7 @@ def jobSum(tag, verbose, order):
                     no_wrap=nowrap, width=2, style=style)
         elif columntitle == 'next_task':
             table.add_column(columntitle, overflow='crop', 
-                    no_wrap=nowrap, width=2, style=style)
+                    no_wrap=nowrap, width=3, style=style)
         elif columntitle == 'clientname':
             table.add_column(columntitle, overflow=overflow_string, 
                     no_wrap=nowrap, width=7, style=style)
