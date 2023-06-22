@@ -113,13 +113,13 @@ def jobSum(tag, verbose, order):
             style = "blue"
         if columntitle == 'description':
             table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, ratio=0.16, style=style)
+                    no_wrap=nowrap, ratio=0.12, style=style)
         elif columntitle == 'completed':
             table.add_column(columntitle, overflow='crop', 
                     no_wrap=nowrap, width=2, style=style)
         elif columntitle == 'task_description':
             table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, ratio=0.24, style=style)
+                    no_wrap=nowrap, ratio=0.28, style=style)
         elif columntitle == 'job_ID':
             table.add_column(columntitle, overflow=overflow_string, 
                     no_wrap=nowrap, width=3, style=style)
@@ -131,7 +131,7 @@ def jobSum(tag, verbose, order):
                     no_wrap=nowrap, width=7, style=style)
         elif columntitle == 'itemname':
             table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, width=10, style=style)
+                    no_wrap=nowrap, width=16, style=style)
         else:
             table.add_column(columntitle, overflow=overflow_string, no_wrap=nowrap, width=None, style=style)
 
@@ -292,6 +292,27 @@ def addjob(itemname, description, client):
     else: #no client specified! just add the task without a client id
         query = "INSERT INTO tasks (itemname, description) VALUES (\'" + itemname_string + "\', " + description +");"
 
+    print(query)
+    output = execute_query(connection, query)
+
+#-------- ADD CLIENT ------
+@cli.command('addclient')
+@click.argument('clientname', nargs=-1)
+@click.option('-c', '--contact', default='', help="contact number or email")
+@click.option('-a', '--address', default='', help="address")
+def addclient(clientname, contact, address):
+    """
+    add a new client
+    """
+    connection = mdsldb_connect()
+    #reconstruct clientname
+    clientname_string = ''
+    for word in clientname:
+        clientname_string += word
+        clientname_string += ' '
+    clientname_string = clientname_string.strip()
+
+    query = "INSERT INTO clients (name, contact, address) VALUES ('{}', '{}', '{}');".format(clientname_string, contact, address)
     print(query)
     output = execute_query(connection, query)
 
