@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import mysql.connector, click, os
+import mysql.connector, click, os, datetime
 from rich import print
 from rich.table import Table
 from rich.console import Console
@@ -8,8 +8,8 @@ from rich.style import Style
 from rich.color import Color
 from mysql.connector import Error
 import re
-import dbclasses
-from dbclasses import read_query, execute_query, print_raw_query_to_table
+import dbclasses, dbtable
+from functions import read_query, execute_query, print_raw_query_to_table
 from dotenv import load_dotenv, dotenv_values
 
 
@@ -68,6 +68,23 @@ def executequery(querystring):
     execute_query(connection, querystring)
     return None
 
+@cli.command("jobsum2")
+@click.option('-t', '--tag', default=None, help="filter tags using this regex string")
+@click.option('-v', '-f', '--verbose', is_flag=True, default=False)
+@click.option('-o', '--order', default=None, help="sort by this column name")
+def jobSum2(tag, verbose, order):
+    connection = mdsldb_connect()
+    orderstring = ''
+    if order: #sort by the field name defined by variable order
+        orderstring = "ORDER BY "+ order
+    if tag:
+        query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring + ";"
+    else:
+        query = "SELECT * FROM \"Job Summary\"" + orderstring + ";"
+    output = read_query(connection, query)
+    table_obj = dbtable.DB_table.fromDB(output)
+    columns = read_query(connection, "DESCRIBE \"Job Summary\";")
+
 @cli.command("jobsum")
 @click.option('-t', '--tag', default=None, help="filter tags using this regex string")
 @click.option('-v', '-f', '--verbose', is_flag=True, default=False)
@@ -86,7 +103,7 @@ def jobSum(tag, verbose, order):
             'completed':Style(color=rgb(50,200,100), bold=True),
             'next_task':Style(color=rgb(200,160,150), bold=True)
             }
-    connection = connection = mdsldb_connect()
+    connection = mdsldb_connect()
     console = Console()
     orderstring = ''
     if order: #sort by the field name defined by variable order
@@ -227,9 +244,9 @@ def taskSum(tag, verbose, taskid, order):
         
 @cli.command('addtask')
 @click.argument('task_description', nargs=-1)
-@click.option('-j', '--job', default=None, help="Name of the job to attach this task to")
+@click.option('-j', '--jobitemname', default=None, help="Name of the job to attach this task to")
 @click.option('-p', '--priority', default=50, help="priority level 0-100")
-def addtask(task_description, job, priority):
+def addtask(task_description, jobitemname, priority):
     """
     add a new task
     """
@@ -243,21 +260,25 @@ def addtask(task_description, job, priority):
         task_string += ' '
     task_string = task_string.strip()
 
-    if job:
-        jobIDquery = "SELECT job_ID from jobs_active WHERE itemname RLIKE \'" + job + "\' LIMIT 1"
-        try:
-            jobid = read_query(connection, jobIDquery)[0][0]
-        except IndexError:
-            print("Sorry, no matching job found!")
-            jobid = None
-            return None #EXIT FUNCTION
-        if jobid:
-            query = "INSERT INTO tasks (task_description, job_ID, priority) VALUES (\'" + task_string + "\'," + str(jobid) + "," + str(priority) + ");"
-            setnexttaskquery = "CALL setnexttask(" + str(jobid) + ");"
-    else: #no job specified! just add the task without a job id
-        query = "INSERT INTO tasks (task_description) VALUES (\'" + task_string + "\');"
+    job_obj = dbclasses.DB_job.byField('itemname', jobitemname, connection)
+    if job_obj:
+        # print(client_obj)
+        job_id = job_obj['job_ID'][0]
+    else:
+        print("Cannot find a job with that name!")
+        job_id = None
 
+    taskdict = {
+            'priority':priority,
+            'task_description':task_string,
+            'job_ID':job_id
+            }
+    task_obj = dbclasses.DB_task.fromDict(taskdict, connection)
+    query = task_obj.generateCreateString()
     print(query)
+    if job_id:
+        setnexttaskquery = "CALL setnexttask({});".format(str(job_id))
+    # print(job_obj, job_obj.generateCreateString())
     output = execute_query(connection, query)
     if setnexttaskquery:
         execute_query(connection, setnexttaskquery)
@@ -266,8 +287,8 @@ def addtask(task_description, job, priority):
 @cli.command('addjob')
 @click.argument('itemname', nargs=-1)
 @click.option('-d', '--description', default='', help="job description")
-@click.option('-c', '--client', default=None, help="client name or id")
-def addjob(itemname, description, client):
+@click.option('-c', '--clientname', default=None, help="client name or id")
+def addjob(itemname, description, clientname):
     """
     add a new job
     """
@@ -278,21 +299,20 @@ def addjob(itemname, description, client):
         itemname_string += word
         itemname_string += ' '
     itemname_string = itemname_string.strip()
-
-    if client:
-        clientIDquery = "SELECT client_ID from clients WHERE name RLIKE \'" + client + "\' LIMIT 1"
-        try:
-            clientid = read_query(connection, clientIDquery)[0][0]
-        except IndexError:
-            print("Sorry, no matching client found!")
-            clientid = None
-            return None #EXIT FUNCTION
-        if clientid:
-            query = "INSERT INTO jobs (itemname, client_ID, description) VALUES (\'" + itemname_string + "\'," + str(clientid) + ",\'" + description + "\');"
-    else: #no client specified! just add the task without a client id
-        query = "INSERT INTO tasks (itemname, description) VALUES (\'" + itemname_string + "\', " + description +");"
-
-    print(query)
+    client_obj = dbclasses.DB_client.byField('name', clientname, connection)
+    if client_obj:
+        # print(client_obj)
+        client_id = client_obj['client_ID'][0]
+    else:
+        print("Cannot find a client with that name!")
+    jobdict = {
+            'itemname':itemname_string,
+            'description':description,
+            'client_ID':client_id
+            }
+    job_obj = dbclasses.DB_job.fromDict(jobdict, connection)
+    query = job_obj.generateCreateString()
+    # print(job_obj, job_obj.generateCreateString())
     output = execute_query(connection, query)
 
 #-------- ADD CLIENT ------
@@ -315,6 +335,31 @@ def addclient(clientname, contact, address):
     query = "INSERT INTO clients (name, contact, address) VALUES ('{}', '{}', '{}');".format(clientname_string, contact, address)
     print(query)
     output = execute_query(connection, query)
+
+#-------- ADD INCOME ------
+@cli.command('addincome')
+@click.argument('amount', nargs=1)
+@click.option('-c', '--clientname', default='', help="client name")
+@click.option('-d', '--date', default='today', help='date. Specifying "today" will generate a string for the current date. This is also the default behaviour.')
+@click.option('-n', '--notes', default='', help='remarks')
+def addincome(amount, clientname, date, notes):
+    """
+    add a new income entry
+    """
+    connection = mdsldb_connect()
+    client_obj = dbclasses.DB_client.byField('name', clientname, connection)
+    if date == 'today': #default to today's date
+        date = datetime.date.today()
+    if client_obj: 
+        client_id = client_obj['client_ID'][0]
+        print(client_id)
+    else:
+        print("Client not found!")
+    
+
+    query = "INSERT INTO income (Amount, Date, paid_by, notes) VALUES ('{}', '{}', '{}', '{}');".format(amount, date, client_id, notes)
+    print(query)
+    # output = execute_query(connection, query)
 
 #----- TASK GROUP  ----------
 @cli.group('task', invoke_without_command=True)
@@ -340,9 +385,8 @@ def delete(context):
     """ remove task from database """ 
     connection = mdsldb_connect()
     taskid = context.obj['taskid']
-    query = "DELETE from tasks WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
-    output = execute_query(connection, query)
-    print(output)
+    task_obj = dbclasses.DB_task.byID(taskid, connection)
+    task_obj.delete_task(connection)
 
 @task.command('done')
 @click.pass_context
@@ -350,10 +394,8 @@ def done(context):
     """ mark task as completed """
     connection = mdsldb_connect()
     taskid = context.obj['taskid']
-    #query = "UPDATE tasks SET completed = 1 WHERE task_ID LIKE "+ taskid + " LIMIT 1;"
-    query = "CALL taskdone("+ taskid + ");"
-    output = execute_query(connection, query)
-    print(output)
+    task_obj = dbclasses.DB_task.byID(taskid, connection)
+    task_obj.taskdone(connection)
 
 @task.command('mod')
 @click.pass_context
