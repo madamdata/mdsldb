@@ -9,6 +9,7 @@ from rich.color import Color
 from mysql.connector import Error
 import re
 import dbclasses, dbtable
+from dbtable import columnStyle
 from functions import read_query, execute_query, print_raw_query_to_table
 from dotenv import load_dotenv, dotenv_values
 
@@ -73,6 +74,7 @@ def executequery(querystring):
 @click.option('-v', '-f', '--verbose', is_flag=True, default=False)
 @click.option('-o', '--order', default=None, help="sort by this column name")
 def jobSum2(tag, verbose, order):
+    """ New Job Summary command """
     connection = mdsldb_connect()
     orderstring = ''
     if order: #sort by the field name defined by variable order
@@ -82,8 +84,9 @@ def jobSum2(tag, verbose, order):
     else:
         query = "SELECT * FROM \"Job Summary\"" + orderstring + ";"
     output = read_query(connection, query)
-    table_obj = dbtable.DB_table.fromDB(output)
     columns = read_query(connection, "DESCRIBE \"Job Summary\";")
+    table_obj = dbtable.DB_jobsum_table.fromDB(columns, output)
+    table_obj.printTable()
 
 @cli.command("jobsum")
 @click.option('-t', '--tag', default=None, help="filter tags using this regex string")
