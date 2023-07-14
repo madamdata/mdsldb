@@ -69,11 +69,11 @@ def executequery(querystring):
     execute_query(connection, querystring)
     return None
 
-@cli.command("jobsum2")
+@cli.command("jobsum")
 @click.option('-t', '--tag', default=None, help="filter tags using this regex string")
 @click.option('-v', '-f', '--verbose', is_flag=True, default=False)
 @click.option('-o', '--order', default=None, help="sort by this column name")
-def jobSum2(tag, verbose, order):
+def jobSum(tag, verbose, order):
     """ New Job Summary command """
     connection = mdsldb_connect()
     orderstring = ''
@@ -86,83 +86,9 @@ def jobSum2(tag, verbose, order):
     output = read_query(connection, query)
     columns = read_query(connection, "DESCRIBE \"Job Summary\";")
     table_obj = dbtable.DB_jobsum_table.fromDB(columns, output)
-    table_obj.printTable()
+    options = {'verbose': verbose, 'tag': tag, 'order': order}
+    table_obj.printTable(options)
 
-@cli.command("jobsum")
-@click.option('-t', '--tag', default=None, help="filter tags using this regex string")
-@click.option('-v', '-f', '--verbose', is_flag=True, default=False)
-@click.option('-o', '--order', default=None, help="sort by this column name")
-def jobSum(tag, verbose, order):
-    """
-    quick summary of all active jobs
-    """
-    cellstyles = {
-            'description':Style(color=rgb(185,110,100), bold=True),
-            'task_description':Style(color=rgb(130,150,210), bold=True),
-            'jID':Style(color=rgb(130,190,210), bold=True),
-            'clientname':Style(color=rgb(150,200,100),bold=True),
-            'itemname':Style(color=rgb(120,80,200), bold=True),
-            'tags':Style(color=rgb(120,180,100), bold=True),
-            'completed':Style(color=rgb(50,200,100), bold=True),
-            'next_task':Style(color=rgb(200,160,150), bold=True)
-            }
-    connection = mdsldb_connect()
-    console = Console()
-    orderstring = ''
-    if order: #sort by the field name defined by variable order
-        orderstring = "ORDER BY "+ order
-    if tag:
-        query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring + ";"
-    else:
-        query = "SELECT * FROM \"Job Summary\"" + orderstring + ";"
-    output = read_query(connection, query)
-    columns = read_query(connection, "DESCRIBE \"Job Summary\";")
-    overflow_string = 'fold'
-    nowrap = not verbose
-
-    table = Table(title='View: Job Summary',
-            padding=(0,0),
-            expand=True,
-            row_styles=(Style(bgcolor=rgb(70,55,65)), Style(bgcolor=rgb(60,45,60)))
-            )
-    for item in columns:
-        columntitle = item[0]
-        try:
-            style = cellstyles[columntitle]
-        except:
-            style = "blue"
-        if columntitle == 'description':
-            table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, ratio=0.12, style=style)
-        elif columntitle == 'completed':
-            table.add_column(columntitle, overflow='crop', 
-                    no_wrap=nowrap, width=2, style=style)
-        elif columntitle == 'task_description':
-            table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, ratio=0.28, style=style)
-        elif columntitle == 'job_ID':
-            table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, width=3, style=style)
-        elif columntitle == 'next_task':
-            table.add_column(columntitle, overflow='crop', 
-                    no_wrap=nowrap, width=3, style=style)
-        elif columntitle == 'clientname':
-            table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, width=7, style=style)
-        elif columntitle == 'itemname':
-            table.add_column(columntitle, overflow=overflow_string, 
-                    no_wrap=nowrap, width=16, style=style)
-        else:
-            table.add_column(columntitle, overflow=overflow_string, no_wrap=nowrap, width=None, style=style)
-
-    for record in output:
-        recordstring = []
-        for item in record:
-            recordstring.append(str(item))
-        table.add_row(*recordstring)
-    #print(output)
-    #print(columns)
-    console.print(table)
 
 @cli.command("tasksum")
 @click.option('-t', '--tag', default=None, help="filter tags using this regex string")
