@@ -71,15 +71,21 @@ def executequery(querystring):
 
 @cli.command("jobsum")
 @click.option('-t', '--tag', default=None, help="filter tags using this regex string")
-@click.option('-v', '-f', '--verbose', is_flag=True, default=False)
+@click.option('-v', '--verbose', is_flag=True, default=False)
 @click.option('-o', '--order', default=None, help="sort by this column name")
-def jobSum(tag, verbose, order):
+@click.option('-f', '-i', '--itemname', default=None, help="filter by item name")
+@click.option('-c', '--client', default=None, help="filter by client name")
+def jobSum(tag, verbose, order, itemname, client):
     """ New Job Summary command """
     connection = mdsldb_connect()
     orderstring = ''
     if order: #sort by the field name defined by variable order
         orderstring = "ORDER BY "+ order
-    if tag:
+    if itemname: 
+        query = 'SELECT * FROM "Job Summary" WHERE itemname RLIKE \'{}\''.format(itemname)
+    elif client:
+        query = 'SELECT * FROM "Job Summary" WHERE clientname RLIKE \'{}\''.format(client)
+    elif tag:
         query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring + ";"
     else:
         query = "SELECT * FROM \"Job Summary\"" + orderstring + ";"
