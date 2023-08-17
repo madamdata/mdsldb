@@ -240,6 +240,7 @@ def addjob(itemname, description, clientname):
         client_id = client_obj['client_ID'][0]
     else:
         print("Cannot find a client with that name!")
+        return False
     jobdict = {
             'itemname':itemname_string,
             'description':description,
@@ -293,8 +294,8 @@ def addincome(amount, clientname, date, notes):
     
 
     query = "INSERT INTO income (Amount, Date, paid_by, notes) VALUES ('{}', '{}', '{}', '{}');".format(amount, date, client_id, notes)
-    print(query)
-    # output = execute_query(connection, query)
+    # print(query)
+    output = execute_query(connection, query)
 
 #----- TASK GROUP  ----------
 @cli.group('task', invoke_without_command=True)
