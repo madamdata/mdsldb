@@ -179,9 +179,10 @@ def taskSum(tag, verbose, taskid, order):
         
 @cli.command('addtask')
 @click.argument('task_description', nargs=-1)
-@click.option('-j', '--jobitemname', default=None, help="Name of the job to attach this task to")
+@click.option('-jname', '--jobitemname', default=None, help="Name of the job to attach this task to")
+@click.option('-j', '--jobid', default=-1, help="Job ID of the job to attach this task to")
 @click.option('-p', '--priority', default=50, help="priority level 0-100")
-def addtask(task_description, jobitemname, priority):
+def addtask(task_description, jobitemname, jobid, priority):
     """
     add a new task
     """
@@ -195,24 +196,25 @@ def addtask(task_description, jobitemname, priority):
         task_string += ' '
     task_string = task_string.strip()
 
-    job_obj = dbclasses.DB_job.byField('itemname', jobitemname, connection)
-    if job_obj:
-        # print(client_obj)
-        job_id = job_obj['job_ID'][0]
-    else:
-        print("Cannot find a job with that name!")
-        job_id = None
+    if jobid == -1:
+        job_obj = dbclasses.DB_job.byField('itemname', jobitemname, connection)
+        if job_obj:
+            # print(client_obj)
+            jobid = job_obj['job_ID'][0]
+        else:
+            print("Cannot find a job with that name!")
+            jobid = None
 
     taskdict = {
             'priority':priority,
             'task_description':task_string,
-            'job_ID':job_id
+            'job_ID':jobid
             }
     task_obj = dbclasses.DB_task.fromDict(taskdict, connection)
     query = task_obj.generateCreateString()
     print(query)
-    if job_id:
-        setnexttaskquery = "CALL setnexttask({});".format(str(job_id))
+    if jobid:
+        setnexttaskquery = "CALL setnexttask({});".format(str(jobid))
     # print(job_obj, job_obj.generateCreateString())
     output = execute_query(connection, query)
     if setnexttaskquery:
@@ -442,6 +444,93 @@ def mod(context, argstring):
         print('No such field in this task.')
     else: # if no errors
         querystring = job_obj.generateUpdateString()
+        print(querystring)
+        confirm = input('Execute query {} ?\n(Y/n)'.format(querystring)) 
+
+        if confirm.lower() == 'y' or confirm.lower() == 'yes':
+            print('Executing.')
+            output = execute_query(connection, querystring)
+            print(output)
+
+# --- INCOME SUMMARY
+
+@cli.command('incomesummary')
+@click.option('-v', '--verbose', is_flag=True, default=False)
+@click.option('-o', '--order', default=None, help="sort by this column name")
+@click.option('-c', '--client', default=None, help="filter by client name")
+def incomesummary(verbose, order, client):
+    connection = mdsldb_connect()
+    order = False
+    if not order:
+        order = 'date'
+    query = "SELECT * from income ORDER BY {}".format(order)
+    output = read_query(connection, query)
+    columns = read_query(connection, "DESCRIBE income;")
+    table_obj = dbtable.DB_incomesum_table.fromDB(columns, output)
+    options = {'verbose': verbose}
+    # options = {}
+    table_obj.printTable(options)
+
+
+
+
+# --- INCOME GROUP ---
+@cli.group('income', invoke_without_command=True)
+@click.argument('transactionid', default=None)
+@click.pass_context
+# @click.option('-o', '--order', default=None, help="sort by this column name")
+# @click.option('-c', '--client', default=None, help="filter by client name")
+def income(context, transactionid):
+    """
+    address, inspect or modify a single job
+    """
+    #pass transactionid to subcommands through the context.obj dict.
+    if context.invoked_subcommand == None:
+        connection = mdsldb_connect()
+        query = "SELECT * from income WHERE Transaction_ID LIKE {} LIMIT 1;".format(transactionid)
+        table = print_raw_query_to_table(connection, query)
+        print(table)
+    else:
+        context.obj = {}
+        context.obj['transactionid'] = transactionid
+
+
+@income.command('delete')
+@click.pass_context
+def delete(context):
+    connection = mdsldb_connect()
+    jobid = context.obj['jobid']
+    query = "DELETE from jobs WHERE job_ID LIKE "+ jobid + " LIMIT 1;"
+    output = execute_query(connection, query)
+    print(output)
+
+@income.command('mod')
+@click.pass_context
+@click.argument('argstring', nargs=-1)
+# @click.option('-c', '--col', default='')
+def mod(context, argstring):
+    """ modify job fields. Syntax: st job <job_ID> mod <field> = <value>  """
+    connection = mdsldb_connect()
+    transactionid = context.obj['transactionid']
+    income_obj = dbclasses.DB_income.byID(transactionid, connection)
+
+    #reconstruct arg string
+    mod_string = ''
+    for word in argstring:
+        mod_string += word
+        mod_string += ' '
+    colname, val = mod_string.split('=')
+    colname = colname.strip()
+    val = val.strip()
+    print(colname, val)
+
+    # update the task object with new values
+    try:
+        income_obj[colname] = (val, income_obj[colname][1])
+    except KeyError:
+        print('No such field in this task.')
+    else: # if no errors
+        querystring = income_obj.generateUpdateString()
         print(querystring)
         confirm = input('Execute query {} ?\n(Y/n)'.format(querystring)) 
 
