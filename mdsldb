@@ -403,9 +403,11 @@ def job(context, jobid):
 def delete(context):
     connection = mdsldb_connect()
     jobid = context.obj['jobid']
+    taskquery = "DELETE from tasks WHERE job_ID LIKE "+ jobid + " ;"
     query = "DELETE from jobs WHERE job_ID LIKE "+ jobid + " LIMIT 1;"
+    taskoutput = execute_query(connection, taskquery)
     output = execute_query(connection, query)
-    print(output)
+    print(taskoutput, output)
 
 @job.command('done')
 @click.pass_context
@@ -499,8 +501,8 @@ def income(context, transactionid):
 @click.pass_context
 def delete(context):
     connection = mdsldb_connect()
-    jobid = context.obj['jobid']
-    query = "DELETE from jobs WHERE job_ID LIKE "+ jobid + " LIMIT 1;"
+    transactionid = context.obj['transactionid']
+    query = "DELETE from income WHERE Transaction_ID LIKE "+ transactionid + " LIMIT 1;"
     output = execute_query(connection, query)
     print(output)
 
