@@ -176,6 +176,26 @@ def taskSum(tag, verbose, taskid, order):
     #print(output)
     #print(columns)
     console.print(table)
+
+@cli.command('listclients')
+@click.option('-n', '--sortbyname', is_flag=True, help="sort by name")
+@click.option('-d', '-i', '--sortbyid', is_flag=True, help="sort by id")
+def listclients(sortbyname, sortbyid):
+    """
+    list all clients
+    """
+    connection = mdsldb_connect()
+    #reconstruct task description
+    task_string = ''
+    #default query - order by name
+    query = "SELECT * FROM clients ORDER BY name"
+
+    if sortbyname: 
+        query = "SELECT * FROM clients ORDER BY name"
+    elif sortbyid:
+        query = "SELECT * FROM clients ORDER BY client_ID"
+    output = print_raw_query_to_table(connection, query)
+    print(output)
         
 @cli.command('addtask')
 @click.argument('task_description', nargs=-1)
@@ -468,6 +488,9 @@ def incomesummary(verbose, order, client):
     query = "SELECT * from income ORDER BY {}".format(order)
     output = read_query(connection, query)
     columns = read_query(connection, "DESCRIBE income;")
+    file = open('/home/ada/incomesummary_sl.txt', 'w')
+    file.write(str(output))
+    file.close()
     table_obj = dbtable.DB_incomesum_table.fromDB(columns, output)
     options = {'verbose': verbose}
     # options = {}

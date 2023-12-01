@@ -96,6 +96,7 @@ class DB_jobsum_table(DB_table):
                 padding=(0,0),
                 expand=True,
                 highlight=True,
+                box=rich.box.MINIMAL,
                 row_styles=(Style(bgcolor=rgb(60,45,55)), Style(bgcolor=rgb(50,35,50))),
                 border_style=Style(color=rgb(80,70,90))
                 )
@@ -176,6 +177,7 @@ class DB_incomesum_table(DB_table):
                 padding=(0,0),
                 expand=True,
                 highlight=True,
+                box=rich.box.MINIMAL,
                 row_styles=(Style(bgcolor=rgb(60,45,55)), Style(bgcolor=rgb(50,35,50))),
                 border_style=Style(color=rgb(80,70,90))
                 )
