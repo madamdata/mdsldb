@@ -12,6 +12,7 @@ import dbclasses, dbtable
 from dbtable import columnStyle
 from functions import read_query, execute_query, print_raw_query_to_table
 from dotenv import load_dotenv, dotenv_values
+# import pyairtable
 
 
 # Load environment and initialize airtable interface
@@ -46,11 +47,34 @@ def rgb(r, g, b):
 
 
 @click.group()
-def cli():
+@click.pass_context
+def cli(context):
     """
     mdsl database command line utilities. 
     """ 
+    load_dotenv('/home/ada/atcli/.env')
+    # print("Connecting to airtable...")
+    # key = os.environ['AIRTABLETOKEN']
+    # baseid = os.environ['AIRTABLEBASEID']
+    # api = pyairtable.Api(key)
+    # base = api.base(baseid)
+    # table = pyairtable.Table(key, baseid, 'Table 1')
+    # -- initialize Context obj (a click object that can be passed to subcommands)
+    context.obj = {}
+    # context.obj['base'] = base
+    # context.obj['table'] = base.table('Table 1')
+
     pass
+
+@cli.command("airtablequery")
+@click.argument('formula')
+@click.argument('whichtable')
+@click.pass_context
+def airtablequery(context, formula, whichtable):
+    table = context.obj['base'].table(whichtable)
+    output = table.all(formula=formula) 
+    # print(context, querystring, whichtable)
+    print(output)
 
 @cli.command("rawquery")
 @click.argument('querystring')
@@ -75,7 +99,9 @@ def executequery(querystring):
 @click.option('-o', '--order', default=None, help="sort by this column name")
 @click.option('-f', '-i', '--itemname', default=None, help="filter by item name")
 @click.option('-c', '--client', default=None, help="filter by client name")
-def jobSum(tag, verbose, order, itemname, client):
+@click.option('-w', '--w4', default=None, help="only w4 entries")
+@click.option('-a', '--allentries', default=None, help="all entries")
+def jobSum(tag, verbose, order, itemname, client, w4, allentries):
     """ New Job Summary command """
     connection = mdsldb_connect()
     orderstring = ''
@@ -302,7 +328,12 @@ def addclient(clientname, contact, address):
 @click.option('-n', '--notes', default='', help='remarks')
 def addincome(amount, clientname, date, notes):
     """
+    \b
     add a new income entry
+    e.g:
+    >> mdsldb addincome -c 'client_name' -n 'for HXP kit' 55.00
+    >> mdsldb addincome -c 'mdsl' -d '2023-11-27' -n 'parts for Korg MS20' '-14.00'
+    NOTE because of bash limitations, negative income ammounts should be surrounded with quotation marks as seen above.
     """
     connection = mdsldb_connect()
     client_obj = dbclasses.DB_client.byField('name', clientname, connection)
@@ -488,9 +519,6 @@ def incomesummary(verbose, order, client):
     query = "SELECT * from income ORDER BY {}".format(order)
     output = read_query(connection, query)
     columns = read_query(connection, "DESCRIBE income;")
-    file = open('/home/ada/incomesummary_sl.txt', 'w')
-    file.write(str(output))
-    file.close()
     table_obj = dbtable.DB_incomesum_table.fromDB(columns, output)
     options = {'verbose': verbose}
     # options = {}

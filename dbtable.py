@@ -184,7 +184,7 @@ class DB_incomesum_table(DB_table):
         # print(self.cellstyles['jID']['style'])
         for item in self.columns:
             columntitle = item[0]
-            print(columntitle)
+            # print(columntitle)
             try: #if there is a matching entry in cellstyles, use that. otherwise, default to blue
                 style = self.cellstyles[columntitle]['style']
             except:
