@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!venv/bin/python3
 
 import mysql.connector, click, os, datetime
 from rich import print
@@ -12,6 +12,9 @@ import dbclasses, dbtable
 from dbtable import columnStyle
 from functions import read_query, execute_query, print_raw_query_to_table
 from dotenv import load_dotenv, dotenv_values
+from pypika import Table as pypikaTable
+from pypika import Query, Database, Order, Field
+from pypika import functions as fn
 # import pyairtable
 
 
@@ -94,28 +97,62 @@ def executequery(querystring):
     return None
 
 @cli.command("jobsum")
-@click.option('-t', '--tag', default=None, help="filter tags using this regex string")
+@click.option('-t', '--tag', default='%', help="filter tags using this regex string")
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.option('-o', '--order', default=None, help="sort by this column name")
-@click.option('-f', '-i', '--itemname', default=None, help="filter by item name")
-@click.option('-c', '--client', default=None, help="filter by client name")
-@click.option('-w', '--w4', default=None, help="only w4 entries")
-@click.option('-a', '--allentries', default=None, help="all entries")
+@click.option('-f', '-i', '--itemname', default='%', help="filter by item name")
+@click.option('-c', '--client', default='%', help="filter by client name")
+@click.option('-w', '--w4', is_flag=True, default=False, help="only w4 entries")
+@click.option('-a', '--allentries', is_flag=True, default=True, help="all entries")
 def jobSum(tag, verbose, order, itemname, client, w4, allentries):
     """ New Job Summary command """
     connection = mdsldb_connect()
     orderstring = ''
-    if order: #sort by the field name defined by variable order
-        orderstring = "ORDER BY "+ order
-    if itemname: 
-        query = 'SELECT * FROM "Job Summary" WHERE itemname RLIKE \'{}\''.format(itemname)
-    elif client:
-        query = 'SELECT * FROM "Job Summary" WHERE clientname RLIKE \'{}\''.format(client)
-    elif tag:
-        query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring + ";"
+
+    # if order: #sort by the field name defined by variable order
+        # orderstring = "ORDER BY "+ order
+    # if itemname: 
+        # query = 'SELECT * FROM "Job Summary" WHERE itemname RLIKE \'{}\''.format(itemname)
+    # elif client:
+        # query = 'SELECT * FROM "Job Summary" WHERE clientname RLIKE \'{}\''.format(client)
+    # elif tag:
+        # query = "SELECT * FROM \"Job Summary\" WHERE tags RLIKE \'" + tag + "\'" + orderstring + ";"
+    # else:
+        # query = "SELECT * FROM \"Job Summary\"" + orderstring + ";"
+
+    jobstable = pypikaTable('Job Summary')
+
+    # set search string in task description based on whether you want to see w4
+    if w4: 
+        w4condition = jobstable.task_description.like('%w4%')
     else:
-        query = "SELECT * FROM \"Job Summary\"" + orderstring + ";"
-    output = read_query(connection, query)
+        w4condition = jobstable.task_description.not_like('w4%')
+
+
+    query = Query.from_(jobstable).select(
+            jobstable.jID, 
+            jobstable.clientname, 
+            jobstable.itemname,
+            jobstable.description,
+            jobstable.task_description,
+            jobstable.tags,
+            jobstable.completed,
+            jobstable.next_task
+            ).where(
+                    (jobstable.completed == 0) &
+                    (jobstable.clientname.like(client)) & 
+                    (jobstable.itemname.like(itemname)) &   
+                    # (jobstable.task_description.like(w4string)) &   
+                    w4condition &
+                    # (jobstable.task_description.not_like(w4string)) &   
+                    # (jobstable.tags.like('{}'.format(tag))) 
+                    ((jobstable.tags.isnull()) | (jobstable.tags.like('%{}%'.format(tag))))
+                    )
+    querystring = str(query).replace('REGEX', 'REGEXP')
+    print(querystring)
+    # print(jobstable.task_description.like(w4string))
+
+    output = read_query(connection, querystring)
     columns = read_query(connection, "DESCRIBE \"Job Summary\";")
     table_obj = dbtable.DB_jobsum_table.fromDB(columns, output)
     options = {'verbose': verbose, 'tag': tag, 'order': order}
@@ -233,7 +270,7 @@ def addtask(task_description, jobitemname, jobid, priority):
     add a new task
     """
     connection = mdsldb_connect()
-    #reconstruct task description
+    # --- reconstruct task description ---
     task_string = ''
     setnexttaskquery = None
     query = None
@@ -242,7 +279,7 @@ def addtask(task_description, jobitemname, jobid, priority):
         task_string += ' '
     task_string = task_string.strip()
 
-    if jobid == -1:
+    if jobid == -1: #if jobid not specified
         job_obj = dbclasses.DB_job.byField('itemname', jobitemname, connection)
         if job_obj:
             # print(client_obj)
